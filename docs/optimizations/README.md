@@ -20,6 +20,7 @@ Folder khusus untuk mendokumentasikan semua perubahan optimisasi pada fork ini
 | Tanggal | Dokumen | Commit |
 |---|---|---|
 | 2026-11-06 | [Fase 1 — runtime, native, runBlocking, build](2026-11-06-optimisasi-fase-1.md) | `a957a4e83` `c3c52a302` `d75932b94` `0f6477f54` |
+| 2026-11-06 | [Release fix + fitur preview mode LUT Management](2026-11-06-release-fix-dan-lut-preview.md) | `9a45df8c7` `a9f7ee546` |
 
 ## Kandidat berikutnya (belum dikerjakan)
 
