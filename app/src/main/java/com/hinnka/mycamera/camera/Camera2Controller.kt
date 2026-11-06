@@ -105,6 +105,9 @@ class Camera2Controller(private val context: Context) {
         private const val CAPTURE_IMAGE_DELIVERY_TIMEOUT_MS = 10_000L
         private const val BURST_CAPTURE_BATCH_SIZE = 8
 
+        // onCaptureCompleted 遥测字段节流：连续值最多约 10Hz 发布。
+        private const val TELEMETRY_UPDATE_INTERVAL_MS = 100L
+
         // 拍照状态机常量
         private const val PRECAPTURE_TIMEOUT_MS = 3_000L
         private const val PRECAPTURE_MAX_WAIT_FRAMES = 60L
@@ -1281,26 +1284,61 @@ class Camera2Controller(private val context: Context) {
 
             // 关键修复：只在自动曝光模式下更新 ISO 和快门速度
             // 手动模式下保持用户设置不变（因为预览使用的是限制后的曝光时间，不是用户设置的值）
-            _state.value = _state.value.copy(
-                iso = if (isAutoExposure && _state.value.isIsoAuto) actualIso ?: _state.value.iso else _state.value.iso,
-                shutterSpeed = if (isAutoExposure && _state.value.isShutterSpeedAuto) actualExposureTimeNs
-                    ?: _state.value.shutterSpeed else _state.value.shutterSpeed,
-                // In-flight results must not undo a user's WB mode change. A session without
-                // a manual anchor still reports the automatic fallback used by the request.
-                awbMode = if (_state.value.awbMode == CameraMetadata.CONTROL_AWB_MODE_OFF &&
-                    manualWhiteBalanceAnchor == null
-                ) awbMode else _state.value.awbMode,
-                actualAwbTemperature = actualAwbTemperature,
-                actualAwbTint = whiteBalanceResult.colorTint,
-                actualAwbGains = actualAwbGains,
-                canAdjustWhiteBalance = canAdjustWhiteBalance,
-                supportsCctWhiteBalance = supportsCctWhiteBalance(),
-                awbTemperatureMin = awbRange.lower,
-                awbTemperatureMax = awbRange.upper,
-                physicalAperture = aperture ?: _state.value.physicalAperture,
-                // 手动对焦保留用户目标值，避免镜头移动中的回报值改变后续拍摄和预览请求。
-                focusDistance = if (_state.value.isAutoFocus) focusDistance else _state.value.focusDistance
-            )
+            // 这些字段只用于 UI 展示和元数据回退；手动/半自动请求构建器读取的是
+            // 用户设置值，不经过此处，因此可以安全地做变更检测与节流。
+            val current = _state.value
+            val newIso = if (isAutoExposure && current.isIsoAuto) actualIso ?: current.iso else current.iso
+            val newShutterSpeed =
+                if (isAutoExposure && current.isShutterSpeedAuto) actualExposureTimeNs ?: current.shutterSpeed
+                else current.shutterSpeed
+            // In-flight results must not undo a user's WB mode change. A session without
+            // a manual anchor still reports the automatic fallback used by the request.
+            val newAwbMode = if (current.awbMode == CameraMetadata.CONTROL_AWB_MODE_OFF &&
+                manualWhiteBalanceAnchor == null
+            ) awbMode else current.awbMode
+            val newActualAwbTemperature = actualAwbTemperature
+            val newActualAwbTint = whiteBalanceResult.colorTint
+            val newActualAwbGains = actualAwbGains
+            val newCanAdjustWhiteBalance = canAdjustWhiteBalance
+            val newSupportsCctWhiteBalance = supportsCctWhiteBalance()
+            val newAwbTemperatureMin = awbRange.lower
+            val newAwbTemperatureMax = awbRange.upper
+            val newPhysicalAperture = aperture ?: current.physicalAperture
+            // 手动对焦保留用户目标值，避免镜头移动中的回报值改变后续拍摄和预览请求。
+            val newFocusDistance = if (current.isAutoFocus) focusDistance else current.focusDistance
+
+            // 离散字段（模式/能力/范围）变更立即发布；连续遥测字段（ISO/快门/AWB/对焦距离）
+            // 每帧抖动，最多约 10Hz 发布，避免 30-60fps 下每帧复制 142 字段的状态对象。
+            val discreteChanged = newAwbMode != current.awbMode ||
+                newCanAdjustWhiteBalance != current.canAdjustWhiteBalance ||
+                newSupportsCctWhiteBalance != current.supportsCctWhiteBalance ||
+                newAwbTemperatureMin != current.awbTemperatureMin ||
+                newAwbTemperatureMax != current.awbTemperatureMax
+            val telemetryChanged = newIso != current.iso ||
+                newShutterSpeed != current.shutterSpeed ||
+                newActualAwbTemperature != current.actualAwbTemperature ||
+                newActualAwbTint != current.actualAwbTint ||
+                newActualAwbGains != current.actualAwbGains ||
+                newPhysicalAperture != current.physicalAperture ||
+                newFocusDistance != current.focusDistance
+            val nowMs = SystemClock.elapsedRealtime()
+            if (discreteChanged || (telemetryChanged && nowMs - lastTelemetryStateUpdateMs >= TELEMETRY_UPDATE_INTERVAL_MS)) {
+                lastTelemetryStateUpdateMs = nowMs
+                _state.value = current.copy(
+                    iso = newIso,
+                    shutterSpeed = newShutterSpeed,
+                    awbMode = newAwbMode,
+                    actualAwbTemperature = newActualAwbTemperature,
+                    actualAwbTint = newActualAwbTint,
+                    actualAwbGains = newActualAwbGains,
+                    canAdjustWhiteBalance = newCanAdjustWhiteBalance,
+                    supportsCctWhiteBalance = newSupportsCctWhiteBalance,
+                    awbTemperatureMin = newAwbTemperatureMin,
+                    awbTemperatureMax = newAwbTemperatureMax,
+                    physicalAperture = newPhysicalAperture,
+                    focusDistance = newFocusDistance
+                )
+            }
             pendingRetainedAwbTemperature?.let { temperature ->
                 if (canAdjustManualWhiteBalance(whiteBalanceResult)) {
                     setAwbTemperature(temperature)
@@ -1313,6 +1351,9 @@ class Camera2Controller(private val context: Context) {
     }
 
     private var lastAfState: Int? = null
+
+    // onCaptureCompleted 遥测字段节流：连续值最多约 10Hz 发布。
+    private var lastTelemetryStateUpdateMs = 0L
 
     private fun logVideoCaptureStats(result: TotalCaptureResult) {
         if (!_state.value.videoRecordingState.isRecording) return
@@ -6285,7 +6326,10 @@ class Camera2Controller(private val context: Context) {
             return
         }
         val requestedRatio = sanitizeZoomRatio(ratio)
-        _state.value = _state.value.copy(zoomRatio = requestedRatio)
+        // 变焦手势高频触发：仅当值变化时才发布状态，避免重复复制/发射。
+        if (requestedRatio != _state.value.zoomRatio) {
+            _state.value = _state.value.copy(zoomRatio = requestedRatio)
+        }
         val builder = previewRequestBuilder ?: return
         val openCameraId = activeOpenCameraId.takeIf { it.isNotEmpty() } ?: return
 
@@ -6297,7 +6341,9 @@ class Camera2Controller(private val context: Context) {
             val maxSupportedZoom = zoomRatioRange?.upper ?: maxZoom
             val clampedRatio = requestedRatio.coerceIn(minZoom, maxSupportedZoom)
 
-            _state.value = _state.value.copy(zoomRatio = clampedRatio)
+            if (clampedRatio != _state.value.zoomRatio) {
+                _state.value = _state.value.copy(zoomRatio = clampedRatio)
+            }
             if (recreateSessionForPhysicalZoomIfNeeded(_state.value)) {
                 PLog.d(TAG, "setZoomRatio: $ratio -> $clampedRatio (physical output session recreated)")
                 return
