@@ -79,6 +79,7 @@ import com.hinnka.mycamera.data.DevelopAnimationStyle
 import com.hinnka.mycamera.model.CameraPreset
 import com.hinnka.mycamera.model.ColorRecipeParams
 import com.hinnka.mycamera.model.LutSelectorMode
+import com.hinnka.mycamera.model.EffectParams
 import com.hinnka.mycamera.raw.SpectralFilmSelection
 import com.hinnka.mycamera.ui.components.*
 import com.hinnka.mycamera.utils.OrientationObserver
@@ -922,6 +923,11 @@ fun CameraScreen(
         val viewfinderTopOverlayPadding = (topBarBottom - viewfinderTop).coerceAtLeast(0.dp)
 
         val topBar = @Composable {
+            // 是否有画面效果处于开启状态（LUT/独立效果/边框），用于高亮一键关闭按钮
+            val currentEffectParamsForEffects by viewModel.currentEffectParams.collectAsState()
+            val effectsActive = currentLutId != "none" ||
+                viewModel.currentFrameId != null ||
+                !currentEffectParamsForEffects.isDefault()
             CameraTopBar(
                 captureMode = state.captureMode,
                 isRecording = state.videoRecordingState.isRecording,
@@ -946,6 +952,8 @@ fun CameraScreen(
                 onVideoFpsClick = {
                     cycleVideoFps(state)?.let(viewModel::setVideoFps)
                 },
+                effectsActive = effectsActive,
+                onDisableEffectsClick = { viewModel.disableAllEffects() },
                 onSettingsClick = {
                     activePanel = if (activePanel == ActivePanel.SETTINGS) ActivePanel.NONE else ActivePanel.SETTINGS
                 },

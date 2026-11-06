@@ -663,6 +663,7 @@
     <string name="video_lut_management_title">Video LUT Management</string>
     <string name="lut_preview_mode">Preview mode</string>
     <string name="lut_list_mode">List mode</string>
+    <string name="disable_all_effects">Disable all effects</string>
     <string name="apply_lut_title">Apply LUT</string>
     <string name="apply_lut_processing">Applying LUT...</string>
     <string name="apply_lut_processing_progress">Applying LUT... (%1$d/%2$d)</string>

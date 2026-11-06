@@ -641,6 +641,7 @@
     <string name="video_lut_management_title">视频 LUT 管理</string>
     <string name="lut_preview_mode">预览模式</string>
     <string name="lut_list_mode">列表模式</string>
+    <string name="disable_all_effects">关闭所有效果</string>
     <string name="apply_lut_title">应用 LUT</string>
     <string name="apply_lut_processing">正在应用 LUT...</string>
     <string name="apply_lut_processing_progress">正在应用 LUT...（%1$d/%2$d）</string>

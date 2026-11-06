@@ -54,6 +54,8 @@ fun CameraTopBar(
     onVideoStabilizationModeChange: (VideoStabilizationMode) -> Unit,
     onVideoResolutionClick: () -> Unit,
     onVideoFpsClick: () -> Unit,
+    effectsActive: Boolean,
+    onDisableEffectsClick: () -> Unit,
     onSettingsClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -67,6 +69,8 @@ fun CameraTopBar(
             onVideoStabilizationModeChange = onVideoStabilizationModeChange,
             onVideoResolutionClick = onVideoResolutionClick,
             onVideoFpsClick = onVideoFpsClick,
+            effectsActive = effectsActive,
+            onDisableEffectsClick = onDisableEffectsClick,
             onSettingsClick = onSettingsClick,
             modifier = modifier
         )
@@ -143,6 +147,19 @@ fun CameraTopBar(
             )
         }
 
+        // 一键关闭所有画面效果（LUT/独立效果/边框）；有效果时高亮
+        PhysicalButton(
+            modifier = Modifier.size(36.dp),
+            onClick = onDisableEffectsClick
+        ) {
+            Icon(
+                imageVector = AppIcons.FilterNone,
+                contentDescription = stringResource(R.string.disable_all_effects),
+                modifier = Modifier.size(20.dp).autoRotate(),
+                tint = if (effectsActive) AccentColor else Color.White
+            )
+        }
+
         PhysicalButton(
             modifier = Modifier.size(36.dp),
             onClick = onSettingsClick
@@ -167,6 +184,8 @@ private fun VideoTopBar(
     onVideoStabilizationModeChange: (VideoStabilizationMode) -> Unit,
     onVideoResolutionClick: () -> Unit,
     onVideoFpsClick: () -> Unit,
+    effectsActive: Boolean,
+    onDisableEffectsClick: () -> Unit,
     onSettingsClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -252,6 +271,16 @@ private fun VideoTopBar(
                                 }
                             }
                         }
+                    }
+
+                    // 一键关闭所有画面效果；有效果时高亮
+                    IconButton(onClick = onDisableEffectsClick) {
+                        Icon(
+                            imageVector = AppIcons.FilterNone,
+                            contentDescription = stringResource(R.string.disable_all_effects),
+                            modifier = Modifier.size(20.dp).autoRotate(),
+                            tint = if (effectsActive) AccentColor else Color.White
+                        )
                     }
 
                     IconButton(onClick = onSettingsClick) {

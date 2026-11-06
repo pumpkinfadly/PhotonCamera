@@ -4021,6 +4021,26 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    /**
+     * 一键关闭所有画面效果：LUT → None、独立效果 → 默认、边框 → 关闭。
+     * 不触碰各 LUT 自己的色彩配方（对比度/曲线等编辑保留）。
+     */
+    fun disableAllEffects() {
+        if (currentLutId.value != "none") setLut(null)
+        viewModelScope.launch {
+            // 复位 "none" 槽位里的独立效果（当前预览/成片使用的正是该槽位）。
+            val noneRecipe = contentRepository.lutManager.loadColorRecipeParams("none")
+            if (!EffectParams.DEFAULT.applyTo(noneRecipe).let { it == noneRecipe }) {
+                contentRepository.lutManager.saveColorRecipeParams(
+                    "none",
+                    EffectParams.DEFAULT.applyTo(noneRecipe)
+                )
+            }
+            userPreferencesRepository.update { activeEffectParams = EffectParams.DEFAULT }
+        }
+        setFrame(null)
+    }
+
     fun setSeparateVideoLutEnabled(enabled: Boolean) {
         if (userPreferences.value.separateVideoLutEnabled == enabled) return
         viewModelScope.launch {

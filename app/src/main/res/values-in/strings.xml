@@ -224,6 +224,7 @@
     <string name="filter_management_title">Manajemen LUT</string>
     <string name="lut_preview_mode">Mode pratinjau</string>
     <string name="lut_list_mode">Mode daftar</string>
+    <string name="disable_all_effects">Matikan semua efek</string>
     <string name="frame_management_title">Manajemen Bingkai</string>
     <string name="category_custom">Kustom</string>
     <string name="current_default">Default</string>
