@@ -269,6 +269,20 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
     private var editLutRecipeSyncJob: Job? = null
     private val pendingEditLutRecipeSync = mutableMapOf<String, ColorRecipeParams>()
+
+    // 进入编辑时预取的 LUT 配方缓存，让 snapshotEditRecipe 免于阻塞读取。
+    private val prefetchedLutRecipes = mutableMapOf<String, ColorRecipeParams>()
+
+    /** 旧照片只存 LUT 引用时，提前在 IO 线程读取配方供编辑期同步读取。 */
+    private suspend fun prefetchEditLutRecipe(metadata: MediaMetadata?) {
+        if (metadata?.colorRecipeParams != null) return
+        val id = metadata?.lutId ?: return
+        if (pendingEditLutRecipeSync.containsKey(id) || prefetchedLutRecipes.containsKey(id)) return
+        val params = withContext(Dispatchers.IO) {
+            contentRepository.lutManager.loadColorRecipeParams(id)
+        }
+        prefetchedLutRecipes[id] = params
+    }
     private val editLutRecipeSyncMutex = Mutex()
 
     var editApplyEffectsToVideo = MutableStateFlow(false)
@@ -1325,22 +1339,20 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    private fun loadSystemPhotoMetadataForEdit(photo: MediaData): MediaMetadata {
+    private suspend fun loadSystemPhotoMetadataForEdit(photo: MediaData): MediaMetadata {
         val context = getApplication<Application>()
         return photo.relatedPhoto?.metadata
             ?: photo.metadata
-            ?: runBlocking {
-                withContext(Dispatchers.IO) {
-                    val uriMetadata = MediaMetadata.fromUri(context, photo.uri)
-                    uriMetadata.copy(
-                        sourceUri = photo.uri.toString(),
-                        mediaType = photo.mediaType,
-                        width = photo.width.takeIf { it > 0 } ?: uriMetadata.width,
-                        height = photo.height.takeIf { it > 0 } ?: uriMetadata.height,
-                        mimeType = photo.mimeType ?: uriMetadata.mimeType,
-                        durationMs = photo.durationMs
-                    )
-                }
+            ?: withContext(Dispatchers.IO) {
+                val uriMetadata = MediaMetadata.fromUri(context, photo.uri)
+                uriMetadata.copy(
+                    sourceUri = photo.uri.toString(),
+                    mediaType = photo.mediaType,
+                    width = photo.width.takeIf { it > 0 } ?: uriMetadata.width,
+                    height = photo.height.takeIf { it > 0 } ?: uriMetadata.height,
+                    mimeType = photo.mimeType ?: uriMetadata.mimeType,
+                    durationMs = photo.durationMs
+                )
             }.also { metadata ->
                 photo.metadata = metadata
                 _systemPhotos.update { current ->
@@ -2128,19 +2140,28 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         editLutConfig = null
 
         if (currentMediaMetadata == null || currentPhotoMetadataId != targetPhoto.id) {
-            val context = getApplication<Application>()
-            val metadata = if (selectedTab == GalleryTab.PHOTON) {
-                runBlocking {
+            // 元数据未加载时异步加载后再进入编辑，避免主线程 runBlocking IO 卡顿。
+            viewModelScope.launch {
+                val metadata = if (selectedTab == GalleryTab.PHOTON) {
+                    val context = getApplication<Application>()
                     withContext(Dispatchers.IO) {
                         GalleryManager.loadMetadata(context, targetPhoto.id)
                     }
+                } else {
+                    loadSystemPhotoMetadataForEdit(targetPhoto)
                 }
-            } else {
-                loadSystemPhotoMetadataForEdit(targetPhoto)
+                if (getCurrentPhoto()?.id != targetPhoto.id) return@launch
+                applyMetadataToEditState(metadata)
+                prefetchEditLutRecipe(metadata)
+                startEditMode(targetPhoto)
             }
-            applyMetadataToEditState(metadata)
+            return
         }
 
+        startEditMode(targetPhoto)
+    }
+
+    private fun startEditMode(targetPhoto: MediaData) {
         isEditing = true
         editSyncAdjustmentsToLut = false
         independentEditPhotoRecipeParams = ColorRecipeParams.DEFAULT
@@ -2403,9 +2424,12 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         // 旧照片可能只保存了 LUT 引用。读取一次实际配方后独立编辑，保持进入编辑时的画面。
         // 按 ID 读取也避免快速切换后取消同步时，拿到 StateFlow 尚未更新的上一个 LUT 配方。
         val recipe = params ?: lutId?.let { id ->
-            pendingEditLutRecipeSync[id] ?: runBlocking(Dispatchers.IO) {
-                contentRepository.lutManager.loadColorRecipeParams(id)
-            }
+            pendingEditLutRecipeSync[id]
+                ?: prefetchedLutRecipes[id]
+                ?: runBlocking(Dispatchers.IO) {
+                    // 仅剩粘贴/切换同步等少见路径；进入编辑时已预取，通常命中上面的缓存。
+                    contentRepository.lutManager.loadColorRecipeParams(id)
+                }
         } ?: ColorRecipeParams.DEFAULT
         return recipe.deepCopy()
     }

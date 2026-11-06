@@ -12,8 +12,6 @@ import android.util.Range
 import com.hinnka.mycamera.data.UserPreferencesRepository
 import com.hinnka.mycamera.utils.DeviceUtil
 import com.hinnka.mycamera.utils.PLog
-import kotlinx.coroutines.flow.firstOrNull
-import kotlinx.coroutines.runBlocking
 import kotlin.math.abs
 
 /**
@@ -753,11 +751,11 @@ class CameraDiscovery(private val context: Context) {
         }
     }
 
+    // 读取已加载的设置缓存（进程级急切加载，DataStore 首次加载完成前为默认值），
+    // 避免在相机线程上 runBlocking DataStore 阻塞相机启动。
     private fun loadCustomLensIds(): List<String> {
         return try {
-            runBlocking {
-                userPreferencesRepository.userPreferences.firstOrNull()?.customLensIds ?: emptyList()
-            }
+            userPreferencesRepository.current.customLensIds
         } catch (e: Exception) {
             PLog.w(TAG, "Failed to load custom lens IDs", e)
             emptyList()
@@ -766,9 +764,7 @@ class CameraDiscovery(private val context: Context) {
 
     private fun loadIszLensConfigs(): List<IszLensConfig> {
         return try {
-            runBlocking {
-                userPreferencesRepository.userPreferences.firstOrNull()?.iszLensConfigs ?: emptyList()
-            }
+            userPreferencesRepository.current.iszLensConfigs
         } catch (e: Exception) {
             PLog.w(TAG, "Failed to load ISZ lens configs", e)
             emptyList()
@@ -777,9 +773,8 @@ class CameraDiscovery(private val context: Context) {
 
     private fun saveIszLensConfigs(configs: List<IszLensConfig>) {
         try {
-            runBlocking {
-                userPreferencesRepository.update { iszLensConfigs = configs }
-            }
+            // 进程作用域写入，不阻塞相机线程。
+            userPreferencesRepository.updateAsync { iszLensConfigs = configs }
         } catch (e: Exception) {
             PLog.e(TAG, "Failed to persist migrated ISZ lens crop coordinates", e)
         }
@@ -835,9 +830,7 @@ class CameraDiscovery(private val context: Context) {
      */
     private fun loadLensIdBlacklist(): List<String> {
         return try {
-            runBlocking {
-                userPreferencesRepository.userPreferences.firstOrNull()?.lensIdBlacklist ?: emptyList()
-            }
+            userPreferencesRepository.current.lensIdBlacklist
         } catch (e: Exception) {
             PLog.w(TAG, "Failed to load lens ID blacklist", e)
             emptyList()
@@ -846,9 +839,7 @@ class CameraDiscovery(private val context: Context) {
 
     private fun loadPreferredMainCameraId(): String? {
         return try {
-            runBlocking {
-                userPreferencesRepository.userPreferences.firstOrNull()?.preferredMainCameraId
-            }
+            userPreferencesRepository.current.preferredMainCameraId
         } catch (e: Exception) {
             PLog.w(TAG, "Failed to load preferred main camera ID", e)
             null
@@ -857,9 +848,7 @@ class CameraDiscovery(private val context: Context) {
 
     private fun loadPreferredMacroCameraId(): String? {
         return try {
-            runBlocking {
-                userPreferencesRepository.userPreferences.firstOrNull()?.preferredMacroCameraId
-            }
+            userPreferencesRepository.current.preferredMacroCameraId
         } catch (e: Exception) {
             PLog.w(TAG, "Failed to load preferred macro camera ID", e)
             null
@@ -868,15 +857,14 @@ class CameraDiscovery(private val context: Context) {
 
     private fun loadLogicalCameraDiscoveryConfig(): LogicalCameraDiscoveryConfig {
         return try {
-            runBlocking {
-                val preferences = userPreferencesRepository.userPreferences.firstOrNull()
-                LogicalCameraDiscoveryConfig(
-                    autoDiscoveryEnabled = userPreferencesRepository.latest().enableLogicalMultiCameraDiscovery,
-                    forcedBindings = parseLogicalCameraBindingRequests(
-                        preferences?.logicalCameraBindingWhitelist ?: emptyList()
-                    )
+            // 单次读取同一个缓存对象，保证字段间一致（原先两次 DataStore 往返）。
+            val preferences = userPreferencesRepository.current
+            LogicalCameraDiscoveryConfig(
+                autoDiscoveryEnabled = preferences.enableLogicalMultiCameraDiscovery,
+                forcedBindings = parseLogicalCameraBindingRequests(
+                    preferences.logicalCameraBindingWhitelist
                 )
-            }
+            )
         } catch (e: Exception) {
             PLog.w(TAG, "Failed to load logical multi-camera discovery config", e)
             LogicalCameraDiscoveryConfig()
