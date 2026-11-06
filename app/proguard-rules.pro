@@ -26,3 +26,11 @@
 # are annotated with androidx @Keep, which covers name and member keeping;
 # native <methods> keeping ships in proguard-android-optimize.txt defaults.
 
+# Gson reflective parsing of assets/films.json (FilmData uses
+# TypeToken<List<Film>>); without these, R8 strips generic signatures and
+# renames model fields, silently yielding an empty film list in release.
+-keepattributes Signature
+-keep class com.google.gson.reflect.TypeToken { *; }
+-keep class * extends com.google.gson.reflect.TypeToken
+-keep class com.hinnka.mycamera.model.Film { *; }
+

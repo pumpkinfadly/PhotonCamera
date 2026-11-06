@@ -82,7 +82,12 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("release")
+            // 无 RELEASE_* 属性时回退 debug 签名，个人分支可直接安装。
+            signingConfig = if (signingConfigs.getByName("release").storeFile != null) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
             // Release 不带 -g 调试信息（默认 RelWithDebInfo 会为每个目标文件生成），
             // 加快 LibRaw/DNG SDK 数百个源文件的编译与链接；最终 .so 由 AGP strip。
             externalNativeBuild {
