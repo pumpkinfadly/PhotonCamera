@@ -274,6 +274,10 @@ class Camera2Controller(private val context: Context) {
     private var previewSessionGeneration: Long = 0L
     private val previewUpdateScheduled = AtomicBoolean(false)
     private var pendingVendorSessionParameterRestart = false
+
+    // 录制中跨越镜头边界时暂缓会话重建（见 recreateSessionForPhysicalZoomIfNeeded），
+    // 在 stopVideoRecording 时应用，避免中途重建导致编码器输入断流、视频定格。
+    private var pendingPhysicalZoomRestart = false
     private var oppoSuperStabilizationEnabled = false
 
     private var previewSurface: Surface? = null
@@ -3203,6 +3207,7 @@ class Camera2Controller(private val context: Context) {
         }
         val sessionGeneration = ++previewSessionGeneration
         pendingVendorSessionParameterRestart = false
+        pendingPhysicalZoomRestart = false
         val templateType = if (
             captureMode == CaptureMode.VIDEO &&
             !useEnhancedStabilization
@@ -6388,6 +6393,22 @@ class Camera2Controller(private val context: Context) {
         if (desiredPhysicalCameraId == activeOutputPhysicalCameraId) return false
         if (cameraDevice == null || previewSurface == null) return false
 
+        // 录制中（专用输入或 EIS+ 均适用）不得重建会话：MediaCodec 正在消费
+        // 当前输入面，重建后 HAL 静默停止向新会话的编码面出帧 → 视频定格。
+        // 此时变焦请求仍走 CONTROL_ZOOM_RATIO/裁剪，在当前镜头范围内继续变焦；
+        // 镜头物理切换推迟到 stopVideoRecording。
+        if (_state.value.videoRecordingState.isRecording) {
+            if (!pendingPhysicalZoomRestart) {
+                PLog.i(
+                    TAG,
+                    "Deferring physical zoom session recreate while recording: " +
+                            "current=$activeOutputPhysicalCameraId, desired=$desiredPhysicalCameraId"
+                )
+            }
+            pendingPhysicalZoomRestart = true
+            return false
+        }
+
         PLog.i(
             TAG,
             "Recreating session for zoom physical output: " +
@@ -7446,9 +7467,16 @@ class Camera2Controller(private val context: Context) {
             }
         }
         videoRecorder.stopRecording()
-        if (pendingVendorSessionParameterRestart && cameraDevice != null && previewSurface != null) {
-            PLog.d(TAG, "Restarting preview session after recording for pending vendor session parameter change")
-            createPreviewSession(openGeneration = cameraOpenGeneration)
+        if (cameraDevice != null && previewSurface != null) {
+            if (pendingVendorSessionParameterRestart) {
+                PLog.d(TAG, "Restarting preview session after recording for pending vendor session parameter change")
+                createPreviewSession(openGeneration = cameraOpenGeneration)
+            } else if (pendingPhysicalZoomRestart) {
+                // 录制期间跨越镜头边界被推迟的物理输出切换，现在安全应用。
+                if (!recreateSessionForPhysicalZoomIfNeeded(_state.value)) {
+                    pendingPhysicalZoomRestart = false
+                }
+            }
         }
     }
 

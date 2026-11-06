@@ -3365,6 +3365,9 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
      */
     fun switchToLens(cameraId: String) {
         if (isVideoLensLocked()) return
+        // 录制中禁止切换镜头：中途 close/reopen 相机会使编码器输入断流、视频定格。
+        // 变焦仍可通过当前镜头的裁剪/变焦范围继续。
+        if (state.value.videoRecordingState.isRecording) return
         val targetCamera = state.value.availableCameras.find { it.cameraId == cameraId }
         syncVendorCaptureSettingsToController()
         cameraController.switchToCameraId(cameraId)
@@ -3378,6 +3381,11 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
 
     fun switchToLensAndSetZoomRatio(cameraId: String, ratio: Float) {
         if (isVideoLensLocked()) {
+            setZoomRatio(ratio)
+            return
+        }
+        // 录制中不切换镜头（防录制定格），仅应用变焦倍率（当前镜头范围内裁剪变焦）。
+        if (state.value.videoRecordingState.isRecording) {
             setZoomRatio(ratio)
             return
         }
