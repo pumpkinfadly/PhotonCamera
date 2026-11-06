@@ -7,6 +7,9 @@
 #include <limits>
 #include <new>
 #include <vector>
+#if defined(_OPENMP)
+#include <omp.h>
+#endif
 
 #include "raw_hdrnet_post_exposure.h"
 
@@ -591,26 +594,76 @@ Java_com_hinnka_mycamera_raw_DngHdrNetProfileGainTableNative_nativeEvaluateDispl
       haze_histogram.assign(kDehazeHistogramSize, 0);
       highlight_histogram.assign(kHighlightHistogramSize, 0);
     }
-    for (int y = 0; y < input_height; ++y) {
+    // 全图逐像素评估与直方图统计并行化：EvaluateHdrNetRgb 为纯函数（只读输入，
+    // 每像素独立输出），直方图使用每线程副本再合并，合并结果与串行版一致。
+#if defined(_OPENMP)
+    const int thread_count = omp_get_max_threads();
+#else
+    const int thread_count = 1;
+#endif
+    std::vector<std::vector<uint32_t>> thread_haze_histograms;
+    std::vector<std::vector<uint32_t>> thread_highlight_histograms;
+    std::vector<int> thread_sample_counts;
+    if (dehaze_enabled == JNI_TRUE) {
+      thread_haze_histograms.assign(
+          static_cast<size_t>(thread_count),
+          std::vector<uint32_t>(kDehazeHistogramSize, 0));
+      thread_highlight_histograms.assign(
+          static_cast<size_t>(thread_count),
+          std::vector<uint32_t>(kHighlightHistogramSize, 0));
+      thread_sample_counts.assign(static_cast<size_t>(thread_count), 0);
+    }
+    std::atomic<bool> full_image_evaluation_valid{true};
+#pragma omp parallel for schedule(static)
+    for (int index = 0; index < full_image_pixel_count; ++index) {
+      if (!full_image_evaluation_valid.load(std::memory_order_relaxed)) {
+        continue;
+      }
+#if defined(_OPENMP)
+      const int thread_index = omp_get_thread_num();
+#else
+      const int thread_index = 0;
+#endif
+      const int y = index / input_width;
+      const int x = index - y * input_width;
       const float source_v = (static_cast<float>(y) + 0.5f) / input_height;
-      for (int x = 0; x < input_width; ++x) {
-        const float source_u = (static_cast<float>(x) + 0.5f) / input_width;
-        RgbSample hdr_rgb{};
-        if (!EvaluateHdrNetRgb(
-                coefficients.data(), source_grid_width, source_grid_height,
-                source_grid_depth, coefficient_count, model_input.data(),
-                input_width, input_height, input_channels, source_u, source_v,
-                hdr_ratio, render_min_gain, render_max_gain,
-                render_max_gain_blend_threshold, guide_shifts.data(),
-                guide_slopes.data(), guide_count, &hdr_rgb)) {
-          LogError("HDRNet full-image evaluation produced a non-finite value");
-          return JNI_FALSE;
+      const float source_u = (static_cast<float>(x) + 0.5f) / input_width;
+      RgbSample hdr_rgb{};
+      if (!EvaluateHdrNetRgb(
+              coefficients.data(), source_grid_width, source_grid_height,
+              source_grid_depth, coefficient_count, model_input.data(),
+              input_width, input_height, input_channels, source_u, source_v,
+              hdr_ratio, render_min_gain, render_max_gain,
+              render_max_gain_blend_threshold, guide_shifts.data(),
+              guide_slopes.data(), guide_count, &hdr_rgb)) {
+        full_image_evaluation_valid.store(false, std::memory_order_relaxed);
+        continue;
+      }
+      full_image_display_rgb[static_cast<size_t>(index)] = hdr_rgb;
+      if (dehaze_enabled == JNI_TRUE) {
+        AddDehazeHistogramSample(
+            hdr_rgb, &thread_haze_histograms[static_cast<size_t>(thread_index)],
+            &thread_highlight_histograms[static_cast<size_t>(thread_index)],
+            &thread_sample_counts[static_cast<size_t>(thread_index)]);
+      }
+    }
+    if (!full_image_evaluation_valid.load()) {
+      LogError("HDRNet full-image evaluation produced a non-finite value");
+      return JNI_FALSE;
+    }
+    if (dehaze_enabled == JNI_TRUE) {
+      for (int thread = 0; thread < thread_count; ++thread) {
+        const std::vector<uint32_t>& haze =
+            thread_haze_histograms[static_cast<size_t>(thread)];
+        for (size_t bin = 0; bin < haze.size(); ++bin) {
+          haze_histogram[bin] += haze[bin];
         }
-        full_image_display_rgb[static_cast<size_t>(y * input_width + x)] = hdr_rgb;
-        if (dehaze_enabled == JNI_TRUE) {
-          AddDehazeHistogramSample(
-              hdr_rgb, &haze_histogram, &highlight_histogram, &sample_count);
+        const std::vector<uint32_t>& highlight =
+            thread_highlight_histograms[static_cast<size_t>(thread)];
+        for (size_t bin = 0; bin < highlight.size(); ++bin) {
+          highlight_histogram[bin] += highlight[bin];
         }
+        sample_count += thread_sample_counts[static_cast<size_t>(thread)];
       }
     }
     if (dehaze_enabled == JNI_TRUE) {

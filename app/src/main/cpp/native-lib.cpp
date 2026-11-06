@@ -755,6 +755,8 @@ static bool applyDngBlackLevelDeltas(LibRaw &rawProcessor,
   }
 
   auto *rawImage = rawProcessor.imgdata.rawdata.raw_image;
+  // 行间独立（每像素单次写入，行/列偏移只读），按行并行处理 12-50MP 原始图。
+#pragma omp parallel for schedule(static)
   for (int y = activeTop; y < activeBottom; ++y) {
     const double rowDelta = rawTags.blackDeltaV.empty()
                                 ? 0.0
@@ -845,6 +847,8 @@ static bool applySupportedDngGainMaps(LibRaw &rawProcessor, const float blackLev
   const int leftMargin = static_cast<int>(rawProcessor.imgdata.sizes.left_margin);
   const int topMargin = static_cast<int>(rawProcessor.imgdata.sizes.top_margin);
 
+  // 行间独立：每像素单次写入，FC/黑电平/增益表均为只读，按行并行处理。
+#pragma omp parallel for schedule(static)
   for (int y = 0; y < rawHeight; ++y) {
     const float rowBlack[2] = {blackLevels[rawProcessor.FC(y, 0)], blackLevels[rawProcessor.FC(y, 1)]};
     const float normY = (static_cast<float>(y - topMargin) + 0.5f) / static_cast<float>(activeHeight);
