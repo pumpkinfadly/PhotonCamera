@@ -22,6 +22,7 @@ Folder khusus untuk mendokumentasikan semua perubahan optimisasi pada fork ini
 | 2026-11-06 | [Fase 1 — runtime, native, runBlocking, build](2026-11-06-optimisasi-fase-1.md) | `a957a4e83` `c3c52a302` `d75932b94` `0f6477f54` |
 | 2026-11-06 | [Release fix + fitur preview mode LUT Management](2026-11-06-release-fix-dan-lut-preview.md) | `9a45df8c7` `a9f7ee546` |
 | 2026-11-06 | [Film simulation built-in LUTs](2026-11-06-film-simulation-luts.md) | `4ee46edc9` |
+| 2026-11-07 | [Bugfix: video freeze saat zoom lintas lensa](2026-11-07-fix-video-zoom-lens-freeze.md) | `0d8ce1ce8` |
 
 ## Kandidat berikutnya (belum dikerjakan)
 
