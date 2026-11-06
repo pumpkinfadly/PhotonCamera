@@ -270,7 +270,7 @@
       },
       "path": "ultramax400.plut",
       "category": "Film",
-      "isVip": true
+      "isVip": false
     },
     {
       "id": "e100",
@@ -280,7 +280,7 @@
       },
       "path": "e100.plut",
       "category": "Film",
-      "isVip": true
+      "isVip": false
     },
     {
       "id": "film_rollei_cn200",
@@ -290,7 +290,7 @@
       },
       "path": "cn200.plut",
       "category": "Film",
-      "isVip": true
+      "isVip": false
     },
     {
       "id": "film_natura_1600",
@@ -300,7 +300,7 @@
       },
       "path": "nature1600.plut",
       "category": "Film",
-      "isVip": true
+      "isVip": false
     },
     {
       "id": "film_superia_1600",
@@ -310,7 +310,7 @@
       },
       "path": "superia1600.plut",
       "category": "Film",
-      "isVip": true
+      "isVip": false
     },
     {
       "id": "film_cinestill_800t",
@@ -320,7 +320,67 @@
       },
       "path": "cinestill800t.33.plut",
       "category": "Film",
-      "isVip": true
+      "isVip": false
+    },
+    {
+      "id": "film_kodak_portra_400",
+      "name": {
+        "en": "Portra 400",
+        "zh": "Portra 400"
+      },
+      "path": "portra400.cube",
+      "category": "Film",
+      "isVip": false
+    },
+    {
+      "id": "film_fuji_velvia_50",
+      "name": {
+        "en": "Velvia 50",
+        "zh": "Velvia 50"
+      },
+      "path": "velvia50.cube",
+      "category": "Film",
+      "isVip": false
+    },
+    {
+      "id": "film_kodak_trx_400",
+      "name": {
+        "en": "Tri-X 400",
+        "zh": "Tri-X 400"
+      },
+      "path": "trix400.cube",
+      "category": "Film",
+      "isVip": false
+    },
+    {
+      "id": "film_kodak_gold_200",
+      "name": {
+        "en": "Gold 200",
+        "zh": "Gold 200"
+      },
+      "path": "gold200.cube",
+      "category": "Film",
+      "isVip": false
+    },
+    {
+      "id": "film_fuji_superia_400",
+      "name": {
+        "en": "Superia 400",
+        "zh": "Superia 400"
+      },
+      "path": "superia400.cube",
+      "category": "Film",
+      "isVip": false
+    },
+    {
+      "id": "film_fuji_provia_100f",
+      "name": {
+        "en": "Provia 100F",
+        "zh": "Provia 100F"
+      },
+      "path": "provia100f.cube",
+      "category": "Film",
+      "isVip": false
     }
   ]
 }
