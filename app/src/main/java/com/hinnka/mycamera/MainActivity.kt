@@ -967,6 +967,8 @@ fun NavigationHost(
             ) { backStackEntry ->
                 val locateLutId = backStackEntry.arguments?.getString("locateLutId")
                 val videoLut = backStackEntry.arguments?.getBoolean("videoLut") ?: false
+                // 预览模式的样张：最近的非视频照片（缩略图优先）。
+                val sampleMedia = galleryViewModel.latestPhoto.value?.takeIf { it.isImage }
                 FilterManagementScreen(
                     viewModel = cameraViewModel,
                     onBack = {
@@ -975,7 +977,8 @@ fun NavigationHost(
                     pendingLutImportUris = pendingLutImportUris,
                     onLutImportHandled = onLutImportHandled,
                     locateLutId = locateLutId,
-                    manageVideoLut = videoLut
+                    manageVideoLut = videoLut,
+                    samplePhotoUri = sampleMedia?.thumbnailUri ?: sampleMedia?.uri
                 )
             }
 

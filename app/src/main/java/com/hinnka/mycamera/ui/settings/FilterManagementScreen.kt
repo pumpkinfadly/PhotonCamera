@@ -5,10 +5,12 @@ import com.hinnka.mycamera.ui.prefs.preferenceValue
 import com.hinnka.mycamera.ui.components.AppModalBottomSheet
 
 import android.annotation.SuppressLint
+import android.graphics.Bitmap
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
@@ -16,6 +18,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
@@ -24,14 +29,18 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -39,14 +48,20 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import coil.size.Size
+import coil.transform.Transformation
 import com.hinnka.mycamera.ui.theme.PremiumGold
 import com.hinnka.mycamera.ui.theme.AccentColor
 import com.hinnka.mycamera.ui.theme.OnAccentColor
 import com.hinnka.mycamera.R
 import com.hinnka.mycamera.video.VideoLogProfile
 import com.hinnka.mycamera.color.TransferCurve
+import com.hinnka.mycamera.data.ContentRepository
 import com.hinnka.mycamera.data.CustomImportManager
 import com.hinnka.mycamera.data.ZipCubeImportManager
+import com.hinnka.mycamera.gallery.GalleryManager
 import com.hinnka.mycamera.lut.LutInfo
 import com.hinnka.mycamera.lut.orderedLutCategoryTitles
 import com.hinnka.mycamera.raw.ColorSpace
@@ -112,6 +127,7 @@ fun FilterManagementScreen(
     onLutImportHandled: () -> Unit = {},
     locateLutId: String? = null,
     manageVideoLut: Boolean = false,
+    samplePhotoUri: Uri? = null,
     modifier: Modifier = Modifier
 ) {
     val preferencesRepository = rememberUserPreferencesRepository()
@@ -206,6 +222,23 @@ fun FilterManagementScreen(
     var pendingZipUris by remember { mutableStateOf<Set<Uri>>(emptySet()) }
 
     val lazyListState = rememberLazyListState()
+
+    // 预览模式（网格）状态与样张位图
+    var previewMode by rememberSaveable { mutableStateOf(false) }
+    var previewSample by remember { mutableStateOf<Bitmap?>(null) }
+    LaunchedEffect(samplePhotoUri) {
+        previewSample = withContext(Dispatchers.IO) {
+            val fromPhoto = samplePhotoUri?.let { uri ->
+                try {
+                    GalleryManager.loadBitmap(context, uri, maxEdge = 720)
+                } catch (e: Exception) {
+                    PLog.w("FilterManagementScreen", "Failed to load LUT preview sample", e)
+                    null
+                }
+            }
+            fromPhoto ?: createSyntheticLutPreviewBitmap()
+        }
+    }
 
     LaunchedEffect(pendingLutImportUris) {
         if (pendingLutImportUris.isNotEmpty()) {
@@ -489,6 +522,17 @@ fun FilterManagementScreen(
                         )
                     }
 
+                    // 预览/列表模式切换
+                    IconButton(onClick = { previewMode = !previewMode }) {
+                        Icon(
+                            imageVector = if (previewMode) Icons.AutoMirrored.Filled.List else AppIcons.GridView,
+                            contentDescription = stringResource(
+                                if (previewMode) R.string.lut_list_mode else R.string.lut_preview_mode
+                            ),
+                            tint = Color.White
+                        )
+                    }
+
                     // 分类管理按钮
                     IconButton(onClick = { showCategoryManagement = true }) {
                         Icon(
@@ -579,8 +623,33 @@ fun FilterManagementScreen(
                 }
             }
 
-            // 滤镜列表
-            LazyColumn(
+            // 滤镜列表（预览模式 = 网格卡片；列表模式 = 原有列表，支持排序与多选）
+            if (previewMode && !isSelectionMode) {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(3),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(vertical = 16.dp)
+                ) {
+                    items(filteredLutList, key = { it.id }) { lutInfo ->
+                        LutPreviewCard(
+                            lutInfo = lutInfo,
+                            sampleBitmap = previewSample,
+                            isDefault = selectedLutId == lutInfo.id,
+                            onSetDefault = {
+                                if (manageVideoLut) {
+                                    viewModel.setVideoLut(lutInfo.id)
+                                } else {
+                                    viewModel.setPhotoLut(lutInfo.id)
+                                }
+                            }
+                        )
+                    }
+                }
+            } else LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = 16.dp),
@@ -2019,4 +2088,169 @@ private fun FilterManagementItem(
             }
         }
     }
+}
+
+/**
+ * 预览模式网格卡片：将 LUT（含其绑定的色彩配方）应用到样张上展示。
+ * 渲染走 LutSelector.LutItem 相同的 Coil Transformation 管线（共享
+ * ContentRepository 的 imageProcessor/lutManager，Coil 内存缓存去重）。
+ */
+@Composable
+private fun LutPreviewCard(
+    lutInfo: LutInfo,
+    sampleBitmap: Bitmap?,
+    isDefault: Boolean,
+    onSetDefault: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val cardShape = RoundedCornerShape(12.dp)
+    val borderColor by animateColorAsState(
+        targetValue = if (isDefault) AccentColor else Color.White.copy(alpha = 0.15f),
+        label = "lutPreviewCardBorder"
+    )
+
+    Column(modifier = modifier) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f)
+                .clip(cardShape)
+                .border(
+                    width = if (isDefault) 1.2.dp else 1.dp,
+                    color = borderColor,
+                    shape = cardShape
+                )
+                .combinedClickable(onClick = onSetDefault)
+        ) {
+            if (sampleBitmap != null) {
+                val transformation = remember(lutInfo.id, sampleBitmap) {
+                    object : Transformation {
+                        override val cacheKey: String =
+                            "lutManagementPreview_${sampleBitmap.hashCode()}_${lutInfo.id}"
+                        val contentRepository = ContentRepository.getInstance(context)
+
+                        override suspend fun transform(input: Bitmap, size: Size): Bitmap {
+                            val lutConfig = withContext(Dispatchers.IO) {
+                                contentRepository.lutManager.loadLut(lutInfo.id)
+                            } ?: return input
+                            val colorRecipeParams = contentRepository.lutManager.loadColorRecipeParams(lutInfo.id)
+                            return contentRepository.imageProcessor.applyLut(
+                                bitmap = input,
+                                lutConfig = lutConfig,
+                                colorRecipeParams = colorRecipeParams
+                            )
+                        }
+                    }
+                }
+                val imageRequest = remember(sampleBitmap, transformation) {
+                    ImageRequest.Builder(context)
+                        .data(sampleBitmap)
+                        .crossfade(true)
+                        .transformations(transformation)
+                        .build()
+                }
+                AsyncImage(
+                    model = imageRequest,
+                    contentDescription = lutInfo.getName(),
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                // 样张尚未加载完成时的占位渐变
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.linearGradient(
+                                colors = listOf(
+                                    Color(0xFF4A148C),
+                                    Color(0xFF00897B),
+                                    Color(0xFFFF6F00)
+                                )
+                            )
+                        )
+                )
+            }
+
+            if (lutInfo.isFavorite) {
+                Icon(
+                    imageVector = Icons.Default.Star,
+                    contentDescription = null,
+                    tint = PremiumGold,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(6.dp)
+                        .size(14.dp)
+                )
+            }
+
+            if (lutInfo.isVip) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .background(
+                            color = PremiumGold,
+                            shape = RoundedCornerShape(bottomStart = 4.dp)
+                        )
+                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = stringResource(R.string.billing_vip_tag),
+                        color = Color.Black,
+                        fontSize = 8.sp,
+                        fontWeight = FontWeight.Bold,
+                        lineHeight = 8.sp
+                    )
+                }
+            }
+
+            // 名称压底显示
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.75f))
+                        )
+                    )
+                    .padding(horizontal = 6.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    text = lutInfo.getName(),
+                    color = if (isDefault) AccentColor else Color.White,
+                    fontSize = 10.sp,
+                    lineHeight = 12.sp,
+                    fontWeight = if (isDefault) FontWeight.SemiBold else FontWeight.Normal,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+/** 无照片时的合成样张：肤色/天空/植被/阴影横带，覆盖常见调色敏感区。 */
+private fun createSyntheticLutPreviewBitmap(): Bitmap {
+    val size = 512
+    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val canvas = android.graphics.Canvas(bitmap)
+    val paint = android.graphics.Paint()
+    val bands = listOf(
+        android.graphics.Color.rgb(244, 214, 194), // 肤色高光
+        android.graphics.Color.rgb(224, 172, 142), // 肤色
+        android.graphics.Color.rgb(142, 178, 214), // 天空
+        android.graphics.Color.rgb(96, 144, 88),   // 植被
+        android.graphics.Color.rgb(196, 148, 108), // 暖木色
+        android.graphics.Color.rgb(64, 64, 72)     // 阴影
+    )
+    val bandHeight = size / bands.size
+    bands.forEachIndexed { index, color ->
+        paint.color = color
+        val top = (index * bandHeight).toFloat()
+        val bottom = if (index == bands.lastIndex) size.toFloat() else ((index + 1) * bandHeight).toFloat()
+        canvas.drawRect(0f, top, size.toFloat(), bottom, paint)
+    }
+    return bitmap
 }

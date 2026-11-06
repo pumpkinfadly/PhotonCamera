@@ -661,6 +661,8 @@
     <string name="restore_in_progress">Restoring settings and custom content...</string>
     <string name="filter_management_title">LUT Management</string>
     <string name="video_lut_management_title">Video LUT Management</string>
+    <string name="lut_preview_mode">Preview mode</string>
+    <string name="lut_list_mode">List mode</string>
     <string name="apply_lut_title">Apply LUT</string>
     <string name="apply_lut_processing">Applying LUT...</string>
     <string name="apply_lut_processing_progress">Applying LUT... (%1$d/%2$d)</string>

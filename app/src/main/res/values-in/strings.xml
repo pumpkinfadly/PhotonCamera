@@ -222,6 +222,8 @@
     <string name="settings_frame_management">Manajemen Bingkai</string>
     <string name="settings_frame_management_description">Kelola bingkai, setel default, urutkan ulang</string>
     <string name="filter_management_title">Manajemen LUT</string>
+    <string name="lut_preview_mode">Mode pratinjau</string>
+    <string name="lut_list_mode">Mode daftar</string>
     <string name="frame_management_title">Manajemen Bingkai</string>
     <string name="category_custom">Kustom</string>
     <string name="current_default">Default</string>
