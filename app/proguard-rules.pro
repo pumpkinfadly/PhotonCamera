@@ -22,14 +22,7 @@
 
 -repackageclasses
 
-# Keep JNI used classes
--keep class com.hinnka.mycamera.raw.DngRawData {
-    <init>(...);
-    *;
-}
-
-# Keep native methods and their classes
--keepclasseswithmembernames class * {
-    native <methods>;
-}
+# JNI-referenced classes (DngRawData, RawCameraCalibration, fotufilm results)
+# are annotated with androidx @Keep, which covers name and member keeping;
+# native <methods> keeping ships in proguard-android-optimize.txt defaults.
 

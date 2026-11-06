@@ -83,12 +83,25 @@ android {
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.getByName("release")
+            // Release 不带 -g 调试信息（默认 RelWithDebInfo 会为每个目标文件生成），
+            // 加快 LibRaw/DNG SDK 数百个源文件的编译与链接；最终 .so 由 AGP strip。
+            externalNativeBuild {
+                cmake {
+                    arguments += "-DCMAKE_BUILD_TYPE=Release"
+                }
+            }
         }
     }
 
     lint {
         // Keep fatal lint analysis off the Release packaging path.
         checkReleaseBuilds = false
+    }
+
+    // Drop the signed dependency-info blob from APK/AAB.
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
     }
 
     flavorDimensions += "channel"
@@ -151,6 +164,10 @@ android {
             manifest.srcFile("src/default/AndroidManifest.xml")
         }
     }
+
+    ksp {
+        arg("room.schemaLocation", "$projectDir/schemas")
+    }
     
     externalNativeBuild {
         cmake {
@@ -184,7 +201,7 @@ dependencies {
     implementation(libs.coil.compose)
 
     // Telephoto for large image viewing with zoom support
-    implementation("me.saket.telephoto:zoomable-image-coil:0.18.0")
+    implementation(libs.telephoto.zoomable.image.coil)
     
     // Navigation Compose
     implementation(libs.androidx.navigation.compose)
@@ -196,7 +213,7 @@ dependencies {
     implementation(libs.androidx.heifwriter)
     
     // DataStore for user preferences
-    implementation("androidx.datastore:datastore-preferences:1.0.0")
+    implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.animation.core)
     implementation(libs.androidx.lifecycle.process)
     implementation(libs.androidx.core.splashscreen)
@@ -218,7 +235,7 @@ dependencies {
     "googleImplementation"(libs.google.billing.ktx)
 
     // Reorderable for drag-and-drop list reordering
-    implementation("sh.calvin.reorderable:reorderable:2.4.3")
+    implementation(libs.reorderable)
 
     // Media3 for video playback and export
     implementation(libs.media3.exoplayer)
@@ -235,7 +252,7 @@ dependencies {
     debugImplementation(libs.androidx.ui.test.manifest)
 
     // LiteRT: Interpreter for CPU models, CompiledModel for GPU-accelerated models
-    implementation("com.google.ai.edge.litert:litert:2.3.2")
-    implementation("com.google.ai.edge.litert:litert-gpu:2.3.2")
-    implementation("com.google.ai.edge.litert:litert-support:2.3.2")
+    implementation(libs.litert)
+    implementation(libs.litert.gpu)
+    implementation(libs.litert.support)
 }

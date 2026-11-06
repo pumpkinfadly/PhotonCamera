@@ -379,6 +379,13 @@ target_compile_definitions(
     PHOTON_ENABLE_DNG_JXL=$<BOOL:${PHOTON_ENABLE_DNG_JXL}>
 )
 target_compile_options(my-native-lib PRIVATE -O3 -ffast-math -w ${OpenMP_CXX_FLAGS})
+# 收缩动态符号表与代码体积：隐藏非 JNI 导出（JNIEXPORT 自带 default visibility），
+# 按节收集并在链接期回收未用代码。不启用 LTO：Halide 对齐校验相关源文件
+# 依赖 -fno-fast-math 的逐文件数值语义，跨模块内联有漂移风险。
+target_compile_options(my-native-lib PRIVATE
+    -fvisibility=hidden -fvisibility-inlines-hidden
+    -ffunction-sections -fdata-sections)
+target_link_options(my-native-lib PRIVATE -Wl,--gc-sections)
 
 target_link_libraries(
     my-native-lib
