@@ -566,6 +566,12 @@ fun CameraScreen(
         val targetZoom = targetCamera.displayIntrinsicZoomRatio.takeIf { it > 0f }
             ?: targetCamera.intrinsicZoomRatio.takeIf { it > 0f }
             ?: 1f
+        // 录制中禁止切换镜头：既不能中途重建会话，也不能进入 LensSwitchTransition——
+        // 它会冻结预览帧并无限等待永不到来的新镜头首帧。
+        if (state.videoRecordingState.isRecording) {
+            animateCurrentLensToZoomStop(targetZoom)
+            return
+        }
         if (viewModel.isVideoLensLocked()) {
             animateCurrentLensToZoomStop(targetZoom)
             return
@@ -577,6 +583,11 @@ fun CameraScreen(
     fun setZoomWithPreviewTransition(targetZoom: Float) {
         lensSwitchTransition.cancelPendingSwitch()
         cancelZoomStopAnimation()
+        // 录制中：只做当前镜头内的变焦（含数字裁剪），不触发镜头切换过渡。
+        if (state.videoRecordingState.isRecording) {
+            viewModel.setZoomRatio(targetZoom)
+            return
+        }
         if (viewModel.isVideoLensLocked()) {
             viewModel.setZoomRatio(targetZoom)
             return
@@ -604,6 +615,11 @@ fun CameraScreen(
     fun animateZoomStopWithPreviewTransition(targetZoom: Float) {
         lensSwitchTransition.cancelPendingSwitch()
         cancelZoomStopAnimation()
+        // 录制中：仅动画变焦，不进入镜头切换过渡（避免冻结帧挂起）。
+        if (state.videoRecordingState.isRecording) {
+            animateCurrentLensToZoomStop(targetZoom)
+            return
+        }
         if (viewModel.isVideoLensLocked() ||
             viewModel.isCurrentLensCustomZoomRatioStop(targetZoom)
         ) {
