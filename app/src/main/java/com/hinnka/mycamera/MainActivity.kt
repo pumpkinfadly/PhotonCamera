@@ -47,6 +47,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
@@ -1036,9 +1037,26 @@ fun NavigationHost(
                 val filmId = backStackEntry.arguments?.getString("filmId") ?: ""
                 val film = FilmData.getFilmById(filmId)
                 if (film != null) {
+                    val scope = rememberCoroutineScope()
+                    val context = LocalContext.current
                     FilmDetailScreen(
                         film = film,
-                        onBack = { navController.popBackStack() }
+                        onBack = { navController.popBackStack() },
+                        onCreateLut = { targetFilm ->
+                            scope.launch {
+                                val lutId = cameraViewModel.createFilmLutFromFilm(targetFilm)
+                                val message = if (lutId != null) {
+                                    context.getString(R.string.film_create_lut_success, targetFilm.name.orEmpty())
+                                } else {
+                                    context.getString(R.string.film_create_lut_failed)
+                                }
+                                android.widget.Toast.makeText(
+                                    context,
+                                    message,
+                                    android.widget.Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        }
                     )
                 }
             }

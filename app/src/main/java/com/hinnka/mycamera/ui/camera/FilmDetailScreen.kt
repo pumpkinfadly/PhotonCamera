@@ -38,6 +38,7 @@ import com.hinnka.mycamera.ui.icons.AppIcons
 fun FilmDetailScreen(
     film: Film,
     onBack: () -> Unit,
+    onCreateLut: ((Film) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Scaffold(
@@ -167,6 +168,29 @@ fun FilmDetailScreen(
                                 }
                             }
                         }
+                    }
+                }
+            }
+
+            // 将胶片规格生成为可用 LUT（分类 "Film Library"）并立即应用
+            if (onCreateLut != null) {
+                item {
+                    Button(
+                        onClick = { onCreateLut(film) },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.Black,
+                            contentColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 16.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.film_create_lut),
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
                     }
                 }
             }

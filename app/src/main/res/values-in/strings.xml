@@ -225,6 +225,9 @@
     <string name="lut_preview_mode">Mode pratinjau</string>
     <string name="lut_list_mode">Mode daftar</string>
     <string name="disable_all_effects">Matikan semua efek</string>
+    <string name="film_create_lut">Buat LUT dari film ini</string>
+    <string name="film_create_lut_success">LUT dibuat: %1$s</string>
+    <string name="film_create_lut_failed">Gagal membuat LUT</string>
     <string name="frame_management_title">Manajemen Bingkai</string>
     <string name="category_custom">Kustom</string>
     <string name="current_default">Default</string>

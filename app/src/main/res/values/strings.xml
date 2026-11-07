@@ -664,6 +664,9 @@
     <string name="lut_preview_mode">Preview mode</string>
     <string name="lut_list_mode">List mode</string>
     <string name="disable_all_effects">Disable all effects</string>
+    <string name="film_create_lut">Create LUT from this film</string>
+    <string name="film_create_lut_success">LUT created: %1$s</string>
+    <string name="film_create_lut_failed">Failed to create LUT</string>
     <string name="apply_lut_title">Apply LUT</string>
     <string name="apply_lut_processing">Applying LUT...</string>
     <string name="apply_lut_processing_progress">Applying LUT... (%1$d/%2$d)</string>

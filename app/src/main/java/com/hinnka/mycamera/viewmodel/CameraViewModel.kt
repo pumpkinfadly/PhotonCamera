@@ -45,6 +45,9 @@ import com.hinnka.mycamera.lut.LutConverter
 import com.hinnka.mycamera.lut.LutInfo
 import com.hinnka.mycamera.lut.creator.LutGenerator
 import com.hinnka.mycamera.lut.creator.OpenAIApiClient
+import com.hinnka.mycamera.lut.film.FilmLutFactory
+import com.hinnka.mycamera.model.Film
+import java.io.ByteArrayOutputStream
 import com.hinnka.mycamera.model.CameraPreset
 import com.hinnka.mycamera.model.ColorRecipeParams
 import com.hinnka.mycamera.model.LutSelectorMode
@@ -575,6 +578,7 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
 
     companion object {
         private const val TAG = "CameraViewModel"
+        private const val FILM_LIBRARY_CATEGORY = "Film Library"
         private const val HDR_BRACKET_FRAME_COUNT = 3
         private const val HDR_BRACKET_ZERO_INDEX = 0
         private const val HDR_BRACKET_LOW_INDEX = 2
@@ -4254,6 +4258,50 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
      */
     fun getLutInfo(id: String): LutInfo? {
         return contentRepository.lutManager.getLutInfo(id)
+    }
+
+    /**
+     * Film Library → 可用的 LUT：按胶片规格元数据参数化生成，
+     * 安装为自定义 LUT（分类 "Film Library"），刷新列表后立即设为当前 LUT。
+     * 同名同分类已存在时直接复用，避免重复创建。
+     */
+    suspend fun createFilmLutFromFilm(film: Film): String? {
+        val filmName = film.name?.takeIf { it.isNotBlank() } ?: return null
+        val lutId = withContext(Dispatchers.IO) {
+            val importManager = contentRepository.getCustomImportManager()
+            val existing = importManager.getCustomLuts().firstOrNull {
+                it.category == FILM_LIBRARY_CATEGORY &&
+                    (it.nameMap["en"] == filmName || it.nameMap["zh"] == filmName)
+            }
+            if (existing != null) {
+                existing.id
+            } else {
+                try {
+                    val config = FilmLutFactory.filmToLutConfig(film)
+                    val plutBytes = ByteArrayOutputStream().use { output ->
+                        LutConverter.exportToPlut(config, output, recipeJson = null)
+                        output.toByteArray()
+                    }
+                    val newId = importManager.importPresetLut(
+                        bytes = plutBytes,
+                        nameMap = mapOf("en" to filmName, "zh" to filmName),
+                        category = FILM_LIBRARY_CATEGORY,
+                        isFavorite = false
+                    )
+                    if (newId != null) {
+                        contentRepository.refreshCustomContent()
+                    }
+                    newId
+                } catch (e: Exception) {
+                    PLog.e(TAG, "Failed to create LUT from film $filmName", e)
+                    null
+                }
+            }
+        }
+        if (lutId != null) {
+            setLut(lutId)
+        }
+        return lutId
     }
 
     private fun capturePhotoThumbnails(settings: CaptureSettingsSnapshot) {
