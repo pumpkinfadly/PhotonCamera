@@ -2,6 +2,37 @@
 
 **Tanggal:** 2026-11-07
 **Commit:** `0d8ce1ce8` — fix(video): defer lens-boundary session recreate while recording
+**Revisi 2:** `40019938e` — clamp recording zoom ke window physical aktif
+**Revisi 3 (akar sebenarnya):** `5b751fbfa` — jangan masuk LensSwitchTransition saat rekam
+
+---
+
+## Revisi 3 — akar masalah sebenarnya (`5b751fbfa`)
+
+Gejala tersisa: **preview freeze** saat pindah lensa. Penyebab bukan session:
+
+`LensSwitchTransition.switchLens` menampilkan overlay frame beku (PixelCopy)
+lalu menunggu `state.first { currentCameraId == target && firstFrame baru }`.
+Guard ViewModel yang mencegah switch saat rekam membuat callback `return`
+tanpa pindah — kondisi wait tak pernah terpenuhi → overlay beku menutupi
+viewfinder tanpa batas.
+
+Fix: ketiga helper UI (`switchToLensWithPreviewTransition`,
+`setZoomWithPreviewTransition`, `animateZoomStopWithPreviewTransition`)
+short-circuit saat `videoRecordingState.isRecording` — hanya animasi zoom
+dalam lensa aktif, tanpa overlay/transition. Guard ViewModel dipertahankan
+sebagai safety net. Diverifikasi user di device.
+
+---
+
+## Lapisan 1-2 (`0d8ce1ce8`, `40019938e`)
+
+- **Lapisan 1**: defer session recreate lintas lensa saat rekam
+  (`pendingPhysicalZoomRestart`, apply di `stopVideoRecording`).
+- **Lapisan 2**: clamp zoom ke window physical aktif saat rekam —
+  `CONTROL_ZOOM_RATIO` yang melewati midpoint antar physical membuat HAL
+  internal-switch physical padahal stream ter-bound ke id lama → frame
+  encoder berhenti.
 
 ---
 
