@@ -7,6 +7,21 @@
 
 ---
 
+## Revisi 4 — sesi video logis (`b2f314642`)
+
+Gejala baru: mulai rekam **saat lensa tele aktif** → hasil video blank.
+Penyebab: semua output video (preview, encoder, EIS reader) di-bind
+`setPhysicalCameraId(tele)`; HAL menerima sesi tapi tak mengirim frame ke
+stream encoder physical → muxer menulis track video tanpa sample.
+
+Fix: sesi video sepenuhnya **logis** (`createOutputConfiguration(bindPhysical
+= false)` untuk ketiga output), pemilihan lensa diserahkan ke HAL via
+`CONTROL_ZOOM_RATIO` (rasio logis). Ikut disesuaikan:
+`recreateSessionForPhysicalZoomIfNeeded` skip VIDEO,
+`resolveZoomRequestCharacteristics` pakai karakteristik logis untuk VIDEO,
+clamp zoom recording dihapus (tak ada stream bound yang bisa stall).
+Sesi foto tetap physical-bound (kualitas RAW).
+
 ## Revisi 3 — akar masalah sebenarnya (`5b751fbfa`)
 
 Gejala tersisa: **preview freeze** saat pindah lensa. Penyebab bukan session:

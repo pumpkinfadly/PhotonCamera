@@ -25,6 +25,7 @@ Folder khusus untuk mendokumentasikan semua perubahan optimisasi pada fork ini
 | 2026-11-07 | [Bugfix: video freeze saat zoom lintas lensa](2026-11-07-fix-video-zoom-lens-freeze.md) | `0d8ce1ce8` |
 | 2026-11-07 | [Fitur: ikon disable-all-effects top bar](2026-11-07-disable-all-effects.md) | `4abbf162d` |
 | 2026-11-07 | [Zoom control: label x + chip 0.5x/1x/2x](2026-11-07-zoom-control.md) | `cf9ff1d3b` |
+| 2026-11-07 | [Film Library → LUT on-demand](2026-11-07-film-library-lut.md) | `466cadfc8` |
 
 ## Kandidat berikutnya (belum dikerjakan)
 
