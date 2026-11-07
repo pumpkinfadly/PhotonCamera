@@ -4959,9 +4959,15 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
             stops.addAll(lensZoomStops)
         }
 
-        // 2x 数字变焦档：即使已有长焦档也单独提供（与镜头档几乎重合时跳过）
-        if (maxZoomRatio >= 1.95f && stops.none { abs(it - 2f) <= 0.01f }) {
-            stops.add(2f)
+        // 每个 ≥1x 镜头（主摄/长焦）追加一个 2x 数字变焦档：
+        // 主摄 1x→2x；长焦 3x→6x、5x→10x（超广角只有默认档）。
+        // 与已有档位重合（如长焦恰为 2x 时主摄的 2x）不重复添加；
+        // 仅在变焦范围足够时提供。
+        lensZoomStops.filter { it >= 0.99f }.forEach { base ->
+            val doubled = base * 2f
+            if (maxZoomRatio >= doubled * 0.99f && stops.none { abs(it - doubled) <= 0.01f }) {
+                stops.add(doubled)
+            }
         }
 
         return stops.sorted()
