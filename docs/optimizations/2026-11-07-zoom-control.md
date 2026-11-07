@@ -1,7 +1,22 @@
-# Zoom Control: Label x-Factor Default + Chip 0.5x/1x/2x
+# Zoom Control: Label x-Factor Default + Chip Per Lensa
 
 **Tanggal:** 2026-11-07
-**Commit:** `cf9ff1d3b` — feat(zoom): x-factor labels by default, quick stops 0.5x/1x/2x
+**Commit:** `cf9ff1d3b` — feat(zoom): x-factor labels by default, quick stops
+**Revisi:** `c180d8c59` — fix(zoom): keep per-lens stops - telephoto chip restored
+
+---
+
+## Revisi (`c180d8c59`)
+
+Versi pertama salah kaprah: chip dibersihkan jadi `[0.5x, 1x, 2x]` tunggal —
+chip longgo (intrinsic 3x dst.) hilang. Clarification user: **chip per lensa**
+— ultrawide cukup default 0.5x, lensa lain masing-masing satu chip dengan
+faktor x sesuai 35mm-equiv-nya relatif main (24mm main → 1x; 48mm tele → 2x;
+72mm → 3x).
+
+Fix: back branch = `filteredLensStops` (semua lensa, hidden-focal filter
+tetap) + satu chip 2x digital hanya bila tak ada lensa dekat 2x dan range
+>= 2x. Custom focal chips + 0.9x minimum stop tetap dibuang.
 
 ---
 
