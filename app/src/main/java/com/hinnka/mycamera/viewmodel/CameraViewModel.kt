@@ -4918,7 +4918,9 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
     /**
      * 计算变焦档位
      *
-     * 后置相机采用精简档位：[超广角默认档（如 0.5x，存在且未隐藏时）, 1x, 2x（变焦范围内）]。
+     * 后置相机：每个镜头一个档位，倍率按镜头 35mm 等效焦距相对主摄换算
+     * （超广角 0.5x、主摄 1x、长焦按其 mm 得 2x/3x/…）；
+     * 无长焦且变焦范围足够时补充一个 2x 数字变焦档。
      * 自定义焦段不再生成后置档位（捏合/标尺仍可自由变焦）。
      */
     fun allZoomStops(
@@ -4946,26 +4948,18 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
             return stops.sorted()
         }
 
-        // 后置：超广角默认档（stop 列表中最小的 <1x 镜头档，即超广角的 displayIntrinsicZoomRatio）
-        val ultraWideDefault = lensZoomStops.filter { it < 0.99f }.minOrNull()
-        if (ultraWideDefault != null) {
-            val isHidden = if (mainCamera != null && mainCamera.focalLength35mmEquivalent > 0) {
-                val fl = ultraWideDefault * mainCamera.focalLength35mmEquivalent
-                hiddenFocalLengths.any { abs(it - fl) < 0.5f }
-            } else {
-                false
+        // 每个镜头固有档位（超广角 0.5x、主摄 1x、长焦 2x/3x…），应用隐藏过滤
+        if (mainCamera != null && mainCamera.focalLength35mmEquivalent > 0) {
+            val filteredLensStops = lensZoomStops.filter { zoom ->
+                val fl = zoom * mainCamera.focalLength35mmEquivalent
+                hiddenFocalLengths.none { abs(it - fl) < 0.5f }
             }
-            if (!isHidden) {
-                stops.add(ultraWideDefault)
-            }
+            stops.addAll(filteredLensStops)
+        } else {
+            stops.addAll(lensZoomStops)
         }
 
-        // 1x 主摄
-        if (stops.none { abs(it - 1f) <= 0.01f }) {
-            stops.add(1f)
-        }
-
-        // 2x（在变焦能力范围内时）
+        // 无 2x 镜头且变焦范围足够时，补一个 2x 数字变焦档
         if (maxZoomRatio >= 1.95f && stops.none { abs(it - 2f) <= 0.05f }) {
             stops.add(2f)
         }
