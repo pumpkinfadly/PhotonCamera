@@ -4959,8 +4959,8 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
             stops.addAll(lensZoomStops)
         }
 
-        // 无 2x 镜头且变焦范围足够时，补一个 2x 数字变焦档
-        if (maxZoomRatio >= 1.95f && stops.none { abs(it - 2f) <= 0.05f }) {
+        // 2x 数字变焦档：即使已有长焦档也单独提供（与镜头档几乎重合时跳过）
+        if (maxZoomRatio >= 1.95f && stops.none { abs(it - 2f) <= 0.01f }) {
             stops.add(2f)
         }
 
