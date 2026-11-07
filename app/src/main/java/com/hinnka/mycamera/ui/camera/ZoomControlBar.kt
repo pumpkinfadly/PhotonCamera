@@ -60,7 +60,7 @@ enum class ZoomDisplayMode {
 
     companion object {
         fun fromPersistedName(name: String?): ZoomDisplayMode {
-            return entries.firstOrNull { it.name == name } ?: FOCAL_LENGTH
+            return entries.firstOrNull { it.name == name } ?: ZOOM_RATIO
         }
     }
 }
@@ -93,11 +93,6 @@ fun ZoomControlBar(
     val customFocalLengths by preferenceValue { it.customFocalLengths }
     val hiddenFocalLengths by preferenceValue { it.hiddenFocalLengths }
     val lensZoomStops = viewModel.calculateLensZoomStops(availableCameras, currentCamera)
-    val zoomStops = viewModel.allZoomStops(lensZoomStops, mainCamera, currentCamera, customFocalLengths, hiddenFocalLengths)
-
-    val macroCameras = remember(availableCameras) {
-        availableCameras.filter { it.lensType == LensType.BACK_MACRO }
-    }
 
     val cameraState by viewModel.state.collectAsState()
     val minZoom = remember(cameraState.availableCameras) {
@@ -105,6 +100,18 @@ fun ZoomControlBar(
     }
     val maxZoom = remember(cameraState.availableCameras) {
         cameraState.availableCameras.filter { it.lensType != LensType.FRONT }.maxOfOrNull { it.maxZoom * it.displayIntrinsicZoomRatio } ?: 20f
+    }
+    val zoomStops = viewModel.allZoomStops(
+        lensZoomStops,
+        mainCamera,
+        currentCamera,
+        customFocalLengths,
+        hiddenFocalLengths,
+        maxZoomRatio = maxZoom
+    )
+
+    val macroCameras = remember(availableCameras) {
+        availableCameras.filter { it.lensType == LensType.BACK_MACRO }
     }
 
     var isContinuousZooming by remember { mutableStateOf(false) }

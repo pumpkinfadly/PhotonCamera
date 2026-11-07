@@ -129,7 +129,8 @@ class UserPreferences internal constructor(
     var phantomFrameId by nullableString("phantom_frame_id")
     var shutterSoundFileName by nullableString("shutter_sound_file_name")
     var burstSoundFileName by nullableString("burst_sound_file_name")
-    var zoomDisplayMode by string("zoom_display_mode", "FOCAL_LENGTH")
+    var zoomDisplayMode by string("zoom_display_mode", "ZOOM_RATIO")
+    var zoomDisplayModeMigratedV2 by bool("zoom_display_mode_migrated_v2", false)
     var useMultipleExposure by bool("use_multiple_exposure", false)  // 是否启用多重曝光
     var rawDigitalZoomResamplingEnabled by bool("raw_digital_zoom_resampling_enabled", false)
     var useLivePhoto by bool("use_live_photo", false)  // 是否启用 Live Photo (Motion Photo)

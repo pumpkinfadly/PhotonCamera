@@ -1471,7 +1471,21 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
 
     val zoomDisplayMode: StateFlow<ZoomDisplayMode> = userPreferencesRepository.userPreferences
         .map { ZoomDisplayMode.fromPersistedName(it.zoomDisplayMode) }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, ZoomDisplayMode.FOCAL_LENGTH)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, ZoomDisplayMode.ZOOM_RATIO)
+
+    init {
+        // 一次性迁移：历史默认是焦距显示；改为倍率显示为默认后，
+        // 已存储 FOCAL_LENGTH 的老安装也切换到 ZOOM_RATIO（用户此后仍可手动切换）。
+        viewModelScope.launch {
+            val prefs = userPreferencesRepository.latest()
+            if (!prefs.zoomDisplayModeMigratedV2) {
+                userPreferencesRepository.update {
+                    if (zoomDisplayMode == "FOCAL_LENGTH") zoomDisplayMode = "ZOOM_RATIO"
+                    zoomDisplayModeMigratedV2 = true
+                }
+            }
+        }
+    }
     val userPreferences: StateFlow<UserPreferences> = userPreferencesRepository.userPreferences
         .stateIn(viewModelScope, SharingStarted.Eagerly, UserPreferences())
     val rawBlackLevelMode: StateFlow<String> = combine(
@@ -4825,12 +4839,16 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
 
         // 2. 计算变焦档位 (逻辑同步自 ZoomControlBar.kt)
         val lensZoomStops = calculateLensZoomStops(availableCameras, currentCamera)
+        val maxZoomRatio = availableCameras
+            .filter { it.lensType != LensType.FRONT }
+            .maxOfOrNull { it.maxZoom * it.displayIntrinsicZoomRatio } ?: 1f
         val zoomStops = allZoomStops(
             lensZoomStops,
             mainCamera,
             currentCamera,
             userPreferences.value.customFocalLengths,
-            userPreferences.value.hiddenFocalLengths
+            userPreferences.value.hiddenFocalLengths,
+            maxZoomRatio = maxZoomRatio
         )
 
         if (zoomStops.isEmpty()) return
@@ -4899,13 +4917,17 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
 
     /**
      * 计算变焦档位
+     *
+     * 后置相机采用精简档位：[超广角默认档（如 0.5x，存在且未隐藏时）, 1x, 2x（变焦范围内）]。
+     * 自定义焦段不再生成后置档位（捏合/标尺仍可自由变焦）。
      */
     fun allZoomStops(
         lensZoomStops: List<Float>,
         mainCamera: CameraInfo?,
         currentCamera: CameraInfo?,
         customFocalLengths: List<Float> = emptyList(),
-        hiddenFocalLengths: List<Float> = emptyList()
+        hiddenFocalLengths: List<Float> = emptyList(),
+        maxZoomRatio: Float = 1f
     ): List<Float> {
         val stops = mutableListOf<Float>()
 
@@ -4924,33 +4946,34 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
             return stops.sorted()
         }
 
-        mainCamera ?: return lensZoomStops.sorted()
-
-        // 1. 添加并过滤原生镜头焦段
-        if (mainCamera.focalLength35mmEquivalent > 0) {
-            val filteredLensStops = lensZoomStops.filter { zoom ->
-                val fl = zoom * mainCamera.focalLength35mmEquivalent
-                hiddenFocalLengths.none { abs(it - fl) < 0.5f }
+        // 后置：超广角默认档（stop 列表中最小的 <1x 镜头档，即超广角的 displayIntrinsicZoomRatio）
+        val ultraWideDefault = lensZoomStops.filter { it < 0.99f }.minOrNull()
+        if (ultraWideDefault != null) {
+            val isHidden = if (mainCamera != null && mainCamera.focalLength35mmEquivalent > 0) {
+                val fl = ultraWideDefault * mainCamera.focalLength35mmEquivalent
+                hiddenFocalLengths.any { abs(it - fl) < 0.5f }
+            } else {
+                false
             }
-            stops.addAll(filteredLensStops)
-        } else {
-            stops.addAll(lensZoomStops)
+            if (!isHidden) {
+                stops.add(ultraWideDefault)
+            }
         }
 
-        addDefaultMinimumZoomStop(stops, lensZoomStops, mainCamera, hiddenFocalLengths)
+        // 1x 主摄
+        if (stops.none { abs(it - 1f) <= 0.01f }) {
+            stops.add(1f)
+        }
 
-        // 2. 添加自定义焦段/倍率 (不参与隐藏过滤)
-        customFocalLengths.forEach { value ->
-            CustomFocalLengthValue.toZoomRatio(value, mainCamera, currentCamera)?.let { zoom ->
-                if (stops.none { abs(it - zoom) <= 0.01f }) {
-                    stops.add(zoom)
-                }
-            }
+        // 2x（在变焦能力范围内时）
+        if (maxZoomRatio >= 1.95f && stops.none { abs(it - 2f) <= 0.05f }) {
+            stops.add(2f)
         }
 
         return stops.sorted()
     }
 
+    /** 超出主摄最小变焦能力时补充最小变焦档（供 getAvailableFocalLengths 使用）。 */
     private fun addDefaultMinimumZoomStop(
         stops: MutableList<Float>,
         lensZoomStops: List<Float>,
