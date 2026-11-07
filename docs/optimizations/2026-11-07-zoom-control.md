@@ -41,6 +41,16 @@ Device ultrawide+main+tele 3x → 5 chip: `0.5x 1x 2x 3x 6x`. Doubled stop
 hanya bila range ≥ 2×base; dedupe bila lensa lain tepat di nilai itu
 (tele 2x menyerap chip 2x main). Replaces single global 2x chip.
 
+## Revisi 4 (`8f94ae240`)
+
+- **Ukuran chip 2x**: `ZoomRulerAdaptiveMetrics` default — item 32→64dp,
+  spacing 4→8dp, font 13/10→26/20sp, ikon macro 16/14→32/28dp, separator
+  24dp (cap adaptive shrink dinaikkan mengikuti). Berlaku kedua bar via
+  helper bersama; bila tak muat layar, shrink otomatis tetap jalan.
+- **Dual label saat swipe**: readout nilai di continuous ruler tampil
+  kedua satuan sekaligus — `2x · 48mm` (bar horizontal: di atas ruler;
+  vertikal/XPAN: di samping ruler) — tak tergantung toggle display mode.
+
 ---
 
 ## Context
