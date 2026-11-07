@@ -3253,12 +3253,15 @@ class Camera2Controller(private val context: Context) {
                 val sessionConfig = SessionConfiguration(
                     sessionOperatingMode,
                     buildList {
-                        add(createOutputConfiguration(surface))
+                        // 视频会话不绑定物理摄像头：编码/预览输出走逻辑相机，
+                        // 镜头选择由 CONTROL_ZOOM_RATIO 交给 HAL。
+                        // 绑定 tele physical 时 HAL 静默不给编码流出帧 → 录制成空白。
+                        add(createOutputConfiguration(surface, bindPhysical = false))
                         stabilizationReader?.surface?.let { eisSurface ->
-                            add(createOutputConfiguration(eisSurface))
+                            add(createOutputConfiguration(eisSurface, bindPhysical = false))
                         }
                         videoSurface?.let { encoderSurface ->
-                            add(createOutputConfiguration(encoderSurface))
+                            add(createOutputConfiguration(encoderSurface, bindPhysical = false))
                         }
                     },
                     Executor { handler.post(it) },
@@ -3677,9 +3680,13 @@ class Camera2Controller(private val context: Context) {
         return true
     }
 
-    private fun createOutputConfiguration(surface: Surface): OutputConfiguration {
+    private fun createOutputConfiguration(
+        surface: Surface,
+        bindPhysical: Boolean = true
+    ): OutputConfiguration {
         return OutputConfiguration(surface).apply {
-            activeOutputPhysicalCameraId?.let { physicalCameraId ->
+            val physicalCameraId = activeOutputPhysicalCameraId.takeIf { bindPhysical }
+            physicalCameraId?.let { physicalCameraId ->
                 setPhysicalCameraId(physicalCameraId)
                 PLog.i(
                     TAG,
@@ -4988,10 +4995,13 @@ class Camera2Controller(private val context: Context) {
     }
 
     private fun resolveZoomRequestCharacteristics(openCameraId: String): CameraCharacteristics {
-        val physicalCameraId = activeOutputPhysicalCameraId
-        if (physicalCameraId != null) {
-            getCameraCharacteristicsOrNull(physicalCameraId, "physical zoom request")?.let {
-                return it
+        // 视频会话不绑定物理输出，变焦特性必须取逻辑相机（CONTROL_ZOOM_RATIO 为逻辑倍率）。
+        if (_state.value.captureMode != CaptureMode.VIDEO) {
+            val physicalCameraId = activeOutputPhysicalCameraId
+            if (physicalCameraId != null) {
+                getCameraCharacteristicsOrNull(physicalCameraId, "physical zoom request")?.let {
+                    return it
+                }
             }
         }
         return getCameraCharacteristicsCached(openCameraId)
@@ -6330,16 +6340,10 @@ class Camera2Controller(private val context: Context) {
             }
             return
         }
+        // 视频会话不再绑定物理输出（逻辑输出 + CONTROL_ZOOM_RATIO 由 HAL 选镜），
+        // 越界变焦不再断流，无需录制期钳制。
         val requestedRatio = sanitizeZoomRatio(ratio)
-        // 录制中把变焦钳制在当前物理镜头窗口内：CONTROL_ZOOM_RATIO 越过相邻物理
-        // 镜头中点会让 HAL 内部切换物理头，而输出流仍绑定旧 physical id，
-        // 帧会静默停止（表现为视频定格）。越过边界的镜头切换已在
-        // recreateSessionForPhysicalZoomIfNeeded 中推迟到停止录制后。
-        val publishRatio = if (_state.value.videoRecordingState.isRecording) {
-            clampZoomRatioToActivePhysicalWindow(requestedRatio)
-        } else {
-            requestedRatio
-        }
+        val publishRatio = requestedRatio
         // 变焦手势高频触发：仅当值变化时才发布状态，避免重复复制/发射。
         if (publishRatio != _state.value.zoomRatio) {
             _state.value = _state.value.copy(zoomRatio = publishRatio)
@@ -6398,8 +6402,8 @@ class Camera2Controller(private val context: Context) {
     }
 
     /**
-     * 录制中将变焦钳制在当前绑定物理镜头的窗口内（相邻物理头固有倍率的中点为界）。
-     * 防止 CONTROL_ZOOM_RATIO 越过中点触发 HAL 内部物理切换而断流。
+     * 录制中把变焦钳制在当前绑定物理镜头的窗口内（相邻物理头固有倍率的中点为界）。
+     * 仅照片会话使用物理绑定；视频会话为逻辑输出，不调用此函数。
      */
     private fun clampZoomRatioToActivePhysicalWindow(ratio: Float): Float {
         val camera = _state.value.getCurrentCameraInfo()
@@ -6427,6 +6431,9 @@ class Camera2Controller(private val context: Context) {
     }
 
     private fun recreateSessionForPhysicalZoomIfNeeded(state: CameraState): Boolean {
+        // 视频会话为纯逻辑输出（见 createPreviewSession），镜头由 CONTROL_ZOOM_RATIO
+        // 选择，不存在需要重绑的物理输出。
+        if (state.captureMode == CaptureMode.VIDEO) return false
         val desiredPhysicalCameraId = resolveOutputPhysicalCameraId(state)
         if (desiredPhysicalCameraId == activeOutputPhysicalCameraId) return false
         if (cameraDevice == null || previewSurface == null) return false
