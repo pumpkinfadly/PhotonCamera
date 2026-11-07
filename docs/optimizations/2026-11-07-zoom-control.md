@@ -18,6 +18,13 @@ Fix: back branch = `filteredLensStops` (semua lensa, hidden-focal filter
 tetap) + satu chip 2x digital hanya bila tak ada lensa dekat 2x dan range
 >= 2x. Custom focal chips + 0.9x minimum stop tetap dibuang.
 
+## Revisi 2 (`92e16ccbd`)
+
+Chip **2x digital selalu ada** (bila range >= 2x) — termasuk saat lensa tele
+sudah punya chip intrinsic (3x). Hasil device 0.5/1/3: `0.5x 1x 2x 3x`.
+Tap 2x → `findOptimalLens` → main lens digital crop. Skip hanya bila ada
+lensa tepat di 2x (±0.01) agar tak dobel.
+
 ---
 
 ## Context
