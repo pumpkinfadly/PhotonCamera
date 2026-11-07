@@ -626,11 +626,9 @@ fun ZoomContinuousRuler(
                 size = Size(indicatorWidth, 15.dp.toPx())
             )
 
-            // 显示当前数值 (在尺子上方的浮窗感)
-            val currentText = when (displayMode) {
-                ZoomDisplayMode.ZOOM_RATIO -> formatZoomRatioLabel(zoomRatio)
-                ZoomDisplayMode.FOCAL_LENGTH -> zoomRatioToFocalLength(zoomRatio, mainCamera) + "mm"
-            }
+            // 显示当前数值 (在尺子上方的浮窗感)——同时标注倍率与等效焦距
+            val currentText = formatZoomRatioLabel(zoomRatio) +
+                " · " + zoomRatioToFocalLength(zoomRatio, mainCamera) + "mm"
             val currentTextLayout = textMeasurer.measure(
                 text = currentText,
                 style = androidx.compose.ui.text.TextStyle(
