@@ -6331,9 +6331,18 @@ class Camera2Controller(private val context: Context) {
             return
         }
         val requestedRatio = sanitizeZoomRatio(ratio)
+        // 录制中把变焦钳制在当前物理镜头窗口内：CONTROL_ZOOM_RATIO 越过相邻物理
+        // 镜头中点会让 HAL 内部切换物理头，而输出流仍绑定旧 physical id，
+        // 帧会静默停止（表现为视频定格）。越过边界的镜头切换已在
+        // recreateSessionForPhysicalZoomIfNeeded 中推迟到停止录制后。
+        val publishRatio = if (_state.value.videoRecordingState.isRecording) {
+            clampZoomRatioToActivePhysicalWindow(requestedRatio)
+        } else {
+            requestedRatio
+        }
         // 变焦手势高频触发：仅当值变化时才发布状态，避免重复复制/发射。
-        if (requestedRatio != _state.value.zoomRatio) {
-            _state.value = _state.value.copy(zoomRatio = requestedRatio)
+        if (publishRatio != _state.value.zoomRatio) {
+            _state.value = _state.value.copy(zoomRatio = publishRatio)
         }
         val builder = previewRequestBuilder ?: return
         val openCameraId = activeOpenCameraId.takeIf { it.isNotEmpty() } ?: return
@@ -6386,6 +6395,35 @@ class Camera2Controller(private val context: Context) {
 
     private fun sanitizeZoomRatio(ratio: Float): Float {
         return if (ratio.isFinite()) ratio.coerceAtLeast(0.01f) else 1f
+    }
+
+    /**
+     * 录制中将变焦钳制在当前绑定物理镜头的窗口内（相邻物理头固有倍率的中点为界）。
+     * 防止 CONTROL_ZOOM_RATIO 越过中点触发 HAL 内部物理切换而断流。
+     */
+    private fun clampZoomRatioToActivePhysicalWindow(ratio: Float): Float {
+        val camera = _state.value.getCurrentCameraInfo()
+        val physicals = camera?.physicalCameras
+        if (camera == null || physicals.isNullOrEmpty()) return ratio
+        val activeId = activeOutputPhysicalCameraId
+            ?: camera.getBoundPhysicalCameraId(getTargetZoomRatioByMain(_state.value, camera))
+            ?: return ratio
+        val active = physicals.firstOrNull { it.cameraId == activeId } ?: return ratio
+
+        val sorted = physicals.sortedBy { it.intrinsicZoomRatio }
+        val index = sorted.indexOfFirst { it.cameraId == active.cameraId }
+        if (index == -1) return ratio
+        val lowerNeighbor = sorted.getOrNull(index - 1)?.intrinsicZoomRatio
+        val upperNeighbor = sorted.getOrNull(index + 1)?.intrinsicZoomRatio
+        val lowerBound = if (lowerNeighbor != null) (lowerNeighbor + active.intrinsicZoomRatio) / 2f else 0f
+        val upperBound = if (upperNeighbor != null) (upperNeighbor + active.intrinsicZoomRatio) / 2f else Float.MAX_VALUE
+
+        val zoomRatioByMain = camera.intrinsicZoomRatio * ratio
+        val clampedByMain = zoomRatioByMain.coerceIn(lowerBound, upperBound)
+        if (abs(clampedByMain - zoomRatioByMain) <= 1e-4f) return ratio
+        val clampedRatio = clampedByMain / camera.intrinsicZoomRatio
+        PLog.d(TAG, "Recording zoom clamped to active physical window: $ratio -> $clampedRatio")
+        return sanitizeZoomRatio(clampedRatio)
     }
 
     private fun recreateSessionForPhysicalZoomIfNeeded(state: CameraState): Boolean {
