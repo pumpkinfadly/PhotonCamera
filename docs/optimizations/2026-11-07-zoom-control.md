@@ -25,6 +25,22 @@ sudah punya chip intrinsic (3x). Hasil device 0.5/1/3: `0.5x 1x 2x 3x`.
 Tap 2x → `findOptimalLens` → main lens digital crop. Skip hanya bila ada
 lensa tepat di 2x (±0.01) agar tak dobel.
 
+## Revisi 3 (`a9dac7b5e`)
+
+Skema final — **pasangan [intrinsic, ×2 digital] per lensa** (ultrawide
+kecuali):
+
+| Lensa | Chip |
+|---|---|
+| Ultrawide | 0.5x / 0.6x (intrinsic saja) |
+| Main | 1x + **2x** (digital) |
+| Tele 3x | 3x + **6x** (digital) |
+| Tele 5x | 5x + **10x** (digital) |
+
+Device ultrawide+main+tele 3x → 5 chip: `0.5x 1x 2x 3x 6x`. Doubled stop
+hanya bila range ≥ 2×base; dedupe bila lensa lain tepat di nilai itu
+(tele 2x menyerap chip 2x main). Replaces single global 2x chip.
+
 ---
 
 ## Context
